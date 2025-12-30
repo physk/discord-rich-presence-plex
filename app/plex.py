@@ -322,11 +322,16 @@ class PlexAlertListener(threading.Thread):
 			activity["state"] = adjustTextLength(stateText, 120, 2)
 		if config.config["display"]["buttons"]:
 			guidsRaw: list[Guid] = []
+			episodeGuidsRaw: list[Guid] = []
 			if mediaType in ["movie", "track"]:
 				guidsRaw = item.guids
 			elif mediaType == "episode":
+				# Get episode's own GUIDs for episode-specific button
+				episodeGuidsRaw = item.guids
+				# Use show's GUIDs for existing buttons (maintains current behavior)
 				guidsRaw = self.server.fetchItem(item.grandparentRatingKey).guids
 			guids: dict[str, str] = { guidSplit[0]: guidSplit[1] for guidSplit in [guid.id.split("://") for guid in guidsRaw] if len(guidSplit) > 1 }
+			episodeGuids: dict[str, str] = { guidSplit[0]: guidSplit[1] for guidSplit in [guid.id.split("://") for guid in episodeGuidsRaw] if len(guidSplit) > 1 } if episodeGuidsRaw else {}
 			buttons: list[discord.ActivityButton] = []
 			for button in config.config["display"]["buttons"]:
 				if "mediaTypes" in button and mediaType not in button["mediaTypes"]:
@@ -360,6 +365,12 @@ class PlexAlertListener(threading.Thread):
 					url = f"https://musicbrainz.org/track/{guid}"
 				if url:
 					buttons.append({ "label": label, "url": url })
+			# For episodes, add an additional button for the episode's IMDB page if available
+			if mediaType == "episode" and episodeGuids.get("imdb"):
+				episodeImdbGuid = episodeGuids.get("imdb")
+				episodeLabel = adjustTextLength(f"IMDb: {item.title}", 30)
+				episodeUrl = f"https://www.imdb.com/title/{episodeImdbGuid}"
+				buttons.append({ "label": episodeLabel, "url": episodeUrl })
 			if buttons:
 				activity["buttons"] = buttons[:2]
 		if state == "playing":
